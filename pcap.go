@@ -13,21 +13,34 @@ import (
 	"time"
 )
 
+type Packet struct {
+	lua.Super
+	cfg  *config
+	cancel context.CancelFunc
+}
+
+func newPacket( cfg *config ) *Packet {
+	p := &Packet{cfg:cfg}
+	p.S = lua.INIT
+	p.T = PACKET
+	return p
+}
+
 // LiveCapture 实时抓包
-func (p *Packet) LiveCapture(tp Transport) {
+func (p *Packet) LiveCapture(tp lua.Writer) {
 	var promiscuous bool
-	if p.C.Promiscuous == "on" {
+	if p.cfg.Promiscuous == "on" {
 		promiscuous = true
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 
-	p.status = lua.RUNNING
-	p.uptime = time.Now().Format("2006-01-02 15:04:05")
+	p.S = lua.RUNNING
+	p.U = time.Now()
 
 	handle, err := pcap.OpenLive(
-		p.C.Device, int32(p.C.Snapshot), promiscuous, time.Duration(p.C.Timeout)*time.Second)
+		p.cfg.Device, int32(p.cfg.Snapshot), promiscuous, time.Duration(p.cfg.Timeout)*time.Second)
 	if err != nil {
 		logger.Errorf("Open live pcap error: %v", err)
 		return
@@ -49,7 +62,7 @@ func (p *Packet) LiveCapture(tp Transport) {
 // PcapWrite 抓包写入文件
 func (p *Packet) PcapWrite(path string, c int, d int) error {
 	var promiscuous bool
-	if p.C.Promiscuous == "on" {
+	if p.cfg.Promiscuous == "on" {
 		promiscuous = true
 	}
 
@@ -63,13 +76,13 @@ func (p *Packet) PcapWrite(path string, c int, d int) error {
 	}
 
 	w := pcapgo.NewWriter(f)
-	err = w.WriteFileHeader(uint32(p.C.Snapshot), layers.LinkTypeEthernet)
+	err = w.WriteFileHeader(uint32(p.cfg.Snapshot), layers.LinkTypeEthernet)
 	if err != nil {
 		logger.Errorf("pcap write file header error: %v", err)
 	}
 
 	handle, err := pcap.OpenLive(
-		p.C.Device, int32(p.C.Snapshot), promiscuous, time.Duration(p.C.Timeout)*time.Second)
+		p.cfg.Device, int32(p.cfg.Snapshot), promiscuous, time.Duration(p.cfg.Timeout)*time.Second)
 	if err != nil {
 		logger.Errorf("Open live pcap error: %v", err)
 		return err
@@ -103,7 +116,7 @@ func (p *Packet) PcapWrite(path string, c int, d int) error {
 }
 
 // PcapRead 读取抓包文件
-func (p *Packet) PcapRead(path string, tp Transport) error {
+func (p *Packet) PcapRead(path string, tp lua.Writer) error {
 	if tp == nil {
 		logger.Errorf("transport is nil")
 		return errors.New("transport is nil")
@@ -134,22 +147,10 @@ func (p *Packet) Close() error {
 		p.cancel = nil
 	}
 
-	p.status = lua.CLOSE
+	p.S = lua.CLOSE
 	return nil
 }
 
 func (p *Packet) Name() string {
-	return p.C.Name
-}
-
-func (p *Packet) Type() string {
-	return "pcap-go"
-}
-
-func (p *Packet) Status() string {
-	return ""
-}
-
-func (p *Packet) State() lua.LightUserDataStatus {
-	return p.status
+	return p.cfg.name
 }

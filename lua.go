@@ -4,42 +4,19 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/rock-go/rock/lua"
 	"github.com/rock-go/rock/xcall"
+	"reflect"
 )
 
-func LuaInjectApi(env xcall.Env) {
-	env.Set("pcap", lua.NewFunction(CreateUserData))
-}
+var PACKET = reflect.TypeOf((*Packet)(nil)).String()
 
-func CreateUserData(L *lua.LState) int {
-	tb := L.CheckTable(1)
-
-	cfg := Config{
-		Name:        tb.CheckString("name", ""),
-		Device:      tb.CheckString("device", ""),
-		Snapshot:    tb.CheckInt("snapshot", 1024),
-		Promiscuous: tb.CheckString("promiscuous", "off"),
-		Timeout:     tb.CheckInt("timeout", 30),
+func newLuaPacket(L *lua.LState) int {
+	cfg := newConfig(L)
+	proc := L.NewProc(cfg.name, PACKET)
+	if proc.IsNil() {
+		proc.Set(newPacket(cfg))
+	} else {
+		proc.Value.(*Packet).cfg = cfg
 	}
-
-	pcap := &Packet{C: cfg}
-
-	var obj *Packet
-	var ok bool
-
-	proc := L.NewProc(pcap.C.Name)
-	if proc.Value == nil {
-		proc.Value = pcap
-		goto done
-	}
-
-	obj, ok = proc.Value.(*Packet)
-	if !ok {
-		L.RaiseError("invalid pcap proc")
-		return 0
-	}
-	obj.C = cfg
-
-done:
 	L.Push(proc)
 	return 1
 }
@@ -66,15 +43,15 @@ func (p *Packet) Index(L *lua.LState, key string) lua.LValue {
 func (p *Packet) NewIndex(L *lua.LState, key string, val lua.LValue) {
 	switch key {
 	case "name":
-		p.C.Name = lua.CheckString(L, val)
+		p.cfg.name = lua.CheckString(L, val)
 	case "device":
-		p.C.Device = lua.CheckString(L, val)
+		p.cfg.Device = lua.CheckString(L, val)
 	case "snap_shot":
-		p.C.Snapshot = lua.CheckInt(L, val)
+		p.cfg.Snapshot = lua.CheckInt(L, val)
 	case "promiscuous":
-		p.C.Promiscuous = lua.CheckString(L, val)
+		p.cfg.Promiscuous = lua.CheckString(L, val)
 	case "timeout":
-		p.C.Timeout = lua.CheckInt(L, val)
+		p.cfg.Timeout = lua.CheckInt(L, val)
 	}
 }
 
@@ -100,13 +77,13 @@ func (p *Packet) LList(L *lua.LState) int {
 
 func (p *Packet) LLive(L *lua.LState) int {
 	ud := L.CheckLightUserData(1)
-	tp, ok := ud.Value.(Transport)
+	tp, ok := ud.Value.(lua.Writer)
 	if !ok {
 		L.RaiseError("invalid transport")
 		return 0
 	}
 
-	go func(tp Transport) {
+	go func(tp lua.Writer) {
 		p.LiveCapture(tp)
 	}(tp)
 
@@ -135,9 +112,8 @@ func (p *Packet) LWrite(L *lua.LState) int {
 
 func (p *Packet) LRead(L *lua.LState) int {
 	path := L.CheckString(1)
-	ud := L.CheckLightUserData(2)
-	tp, ok := ud.Value.(Transport)
-	if !ok {
+	tp := lua.CheckWriter(L.CheckLightUserData(2))
+	if tp == nil {
 		L.RaiseError("invalid transport")
 		return 0
 	}
@@ -147,4 +123,8 @@ func (p *Packet) LRead(L *lua.LState) int {
 	}
 
 	return 0
+}
+
+func LuaInjectApi(env xcall.Env) {
+	env.Set("pcap", lua.NewFunction(newLuaPacket))
 }
