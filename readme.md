@@ -22,7 +22,7 @@ rock.Inject(xcall.Rock, pcap.LuaInjectApi)
 -- 抓包模块
 local pcap = rock.pcap {
     name = "pcap_test",
-    device = "\\Device\\NPF_{55FE0256-503A-44C3-AE86-2647F0FA5C56}", -- 网卡名称,linux可直接通过ifconfig命令获取，例如eth0；Windows需查看注册表，或通过pcap.list()函数获取
+    device = "192.168.1.2", -- 要抓包的网卡IP地址
     snapshot = 1024, -- 抓取包的最大长度
     promiscuous = "on", -- 是否开启混杂模式，on 表示开启，其它则不开启
     timeout = 5, -- 超时，单位秒
@@ -38,6 +38,7 @@ local pcap = rock.pcap {
 local device = pcap.list()
 print(device)
 
+-- example
 --pcap.live(kfk)
 --pcap.close()
 -- 抓包结果保存至文件

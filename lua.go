@@ -3,6 +3,7 @@ package pcap
 import (
 	"github.com/google/gopacket/pcap"
 	"github.com/rock-go/rock/lua"
+	"github.com/rock-go/rock/utils"
 	"github.com/rock-go/rock/xcall"
 	"reflect"
 )
@@ -45,7 +46,12 @@ func (p *Packet) NewIndex(L *lua.LState, key string, val lua.LValue) {
 	case "name":
 		p.cfg.name = lua.CheckString(L, val)
 	case "device":
-		p.cfg.Device = lua.CheckString(L, val)
+		dev, err := getDevByIP(utils.LValueToStr(val, ""))
+		if err != nil {
+			L.RaiseError("%v", err)
+			return
+		}
+		p.cfg.Device = dev
 	case "snap_shot":
 		p.cfg.Snapshot = lua.CheckInt(L, val)
 	case "promiscuous":

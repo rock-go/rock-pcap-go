@@ -3,6 +3,7 @@ package pcap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -15,12 +16,12 @@ import (
 
 type Packet struct {
 	lua.Super
-	cfg  *config
+	cfg    *config
 	cancel context.CancelFunc
 }
 
-func newPacket( cfg *config ) *Packet {
-	p := &Packet{cfg:cfg}
+func newPacket(cfg *config) *Packet {
+	p := &Packet{cfg: cfg}
 	p.S = lua.INIT
 	p.T = PACKET
 	return p
@@ -39,6 +40,7 @@ func (p *Packet) LiveCapture(tp lua.Writer) {
 	p.S = lua.RUNNING
 	p.U = time.Now()
 
+	logger.Errorf("%s pcap start live capture", p.cfg.name)
 	handle, err := pcap.OpenLive(
 		p.cfg.Device, int32(p.cfg.Snapshot), promiscuous, time.Duration(p.cfg.Timeout)*time.Second)
 	if err != nil {
@@ -69,6 +71,8 @@ func (p *Packet) PcapWrite(path string, c int, d int) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 
+	logger.Infof("%s pcap start capture packets and save result to %s", p.cfg.name, path)
+
 	f, err := os.Create(path)
 	if err != nil {
 		logger.Errorf("create packet save file %s error: %v", path, err)
@@ -95,7 +99,7 @@ func (p *Packet) PcapWrite(path string, c int, d int) error {
 	for {
 		select {
 		case <-duration.C:
-			logger.Infof("pcap for %ds, packets count: %d", d, count)
+			logger.Infof("%s pcap for %ds, packets count: %d", p.cfg.name, d, count)
 			return nil
 		case packet := <-packetSrc.Packets():
 			err := w.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
@@ -105,7 +109,7 @@ func (p *Packet) PcapWrite(path string, c int, d int) error {
 			}
 			count++
 			if count >= c {
-				logger.Errorf("packets count: %d", count)
+				logger.Infof("%s pcap for %ds, packets count: %d", p.cfg.name, d, count)
 				return nil
 			}
 		case <-ctx.Done():
@@ -121,6 +125,8 @@ func (p *Packet) PcapRead(path string, tp lua.Writer) error {
 		logger.Errorf("transport is nil")
 		return errors.New("transport is nil")
 	}
+
+	logger.Infof("%s pcap start read packets from %s", p.cfg.name, path)
 
 	handle, err := pcap.OpenOffline(path)
 	if err != nil {
@@ -153,4 +159,26 @@ func (p *Packet) Close() error {
 
 func (p *Packet) Name() string {
 	return p.cfg.name
+}
+
+func (p *Packet) Type() string {
+	return "pcap"
+}
+
+func getDevByIP(ip string) (string, error) {
+	devs, err := pcap.FindAllDevs()
+	if err != nil {
+		logger.Errorf("get all devices error: %v", err)
+		return "", err
+	}
+
+	for _, dev := range devs {
+		for _, ifc := range dev.Addresses {
+			if ip == ifc.IP.String() {
+				return dev.Name, nil
+			}
+		}
+	}
+
+	return "", errors.New(fmt.Sprintf("not found devices by %s", ip))
 }
