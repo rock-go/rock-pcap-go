@@ -17,10 +17,7 @@ func (p *Packet) Show(out lua.Printer) {
 	out.Printf("snap_shot: %d", p.cfg.Snapshot)
 	out.Printf("promiscuous: %s", p.cfg.Promiscuous)
 	out.Printf("timeout: %d", p.cfg.Timeout)
-	//out.Printf("count: %d", p.Count)
-	//out.Printf("duration: %d", p.Duration)
-	//out.Printf("path: %s", p.Path)
-	//out.Printf("transport: %s", p.Transport.name())
+
 	out.Println("")
 }
 
